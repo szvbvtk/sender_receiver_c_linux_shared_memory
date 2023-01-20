@@ -24,7 +24,7 @@ int main(int argc, char **argv){
     int shmid = shmget(key, BUFSIZE, 0666);
 
     if(shmid == -1){
-        fprintf(stderr, "Nie udało się przydzielić bloku pamięci współdzielonej\n");
+        fprintf(stderr, "Nie udało się uzyskać dostępu do bloku pamięci współdzielonej\n");
         return 3;
     }
 
@@ -38,27 +38,25 @@ int main(int argc, char **argv){
     FILE *fp = fopen(argv[2], "wb");
 
     int bytes_read;
-    // while ((bytes_read = fwrite(memseg, 1, BUFSIZE, fp)) > 0) {
-    //     printf("Odebrano %d bajtow\n", bytes_read);
-    //         if (feof(fp)) {
-    //         break;
-    //     }
-    // }
+    char end_of_transfer[] = "$!KoniecPrzesylu!$";
+    char wait[] = "$!Spinlock!$";
+    char start_of_transfer[] = "$!StartPrzesylu!$";
 
-    while (*memseg != '}'){
-        bytes_read = fwrite(memseg, 1, BUFSIZE, fp);
-        printf("Odebrano %d bajtow\n", bytes_read);
-        *memseg = '*';
-        while (*memseg == '*') {}  
+
+    strcpy(memseg, start_of_transfer);
+    while(strcmp(memseg, start_of_transfer) == 0){};
+
+    int i = 1;
+    while (strcmp(end_of_transfer, memseg) != 0){
+        fwrite(memseg, 1, BUFSIZE, fp);
+        printf("%d. odebrano\n", i);
+        i += 1;
+        strcpy(memseg, wait);
+        while (strcmp(memseg, wait) == 0) {}  
     }
 
-    // fprintf(stdout, "%s \n", (char *)memseg);
-    // fwrite((char *)memseg, 1, sizeof(char) * strlen((char *)memseg), fp);
-
-
-
     fclose(fp);
-
+    printf("Transfer pliku został zakończony\n");
     if(shmdt(memseg) == -1){
         fprintf(stderr, "Nie udało się odłączyć bloku pamięci współdzielonej\n");
         return 5;

@@ -18,48 +18,56 @@ int main(int argc, char **argv){
 
     if(key == -1) {
         fprintf(stderr, "Nie udało się wygenerować klucza\n");
-        return 2;
+        return 1;
     }
 
     int shmid = shmget(key, BUFSIZE, 0666 | IPC_CREAT | IPC_EXCL);
 
     if(shmid == -1){
         fprintf(stderr, "Nie udało się przydzielić bloku pamięci współdzielonej\n");
-        return 3;
+        return 1;
     }
 
     char *memseg = shmat(shmid, NULL, 0);
 
     if(memseg == (char *) -1){
         fprintf(stderr, "Nie udało się dołączyć bloku pamięci współdzielonej\n");
-        return 4;
+        return 1;
     }
 
     // stworzenie i dolaczenie bloku pamieci
     char buf[BUFSIZE];
+    char end_of_transfer[] = "$!KoniecPrzesylu!$";
+    char start_of_transfer[] = "$!StartPrzesylu!$";
+    char wait[] = "$!Spinlock!$";
+
     FILE *fp = fopen(argv[2], "r");
     int bytes_read;
-    while ((bytes_read = fread(memseg, 1, BUFSIZE, fp)) > 0) {
-        fprintf(stdout, "Przesłano %d bajtów...\n", bytes_read );
-        while (*memseg != '*') {}  
-    }
-    *memseg = '}';
-    fclose(fp);
     
-    puts("Press <Enter> to continue...");
-    getchar();
+    printf("Oczekiwanie na odbiorcę\n");
+    while(strcmp(memseg, start_of_transfer) != 0){};
+    printf("Rozpoczęcie przesyłu\n");
+
+    int i = 1;
+    while ((bytes_read = fread(memseg, 1, BUFSIZE, fp)) > 0) {
+        fprintf(stdout, "%d. Przesłano %d bajtów...\n", i, bytes_read );
+        i += 1;
+        while (strcmp(memseg, wait) != 0) {}  
+    }
+    strcpy(memseg, end_of_transfer);
+    printf("Plik został przesłany\n");
+    fclose(fp);
 
     // odlaczenie i usuniecie bloku pamieci
     if(shmdt(memseg) == -1){
         fprintf(stderr, "Nie udało się odłączyć bloku pamięci współdzielonej\n");
-        return 5;
+        return 1;
     }
 
     if(shmctl (shmid, IPC_RMID, NULL) == -1) {
         fprintf(stderr, "Nie udało się zwolnić bloku pamięci współdzielonej\n");
-        return 6;
+        return 1;
     }
 
     return 0;
 }
-
